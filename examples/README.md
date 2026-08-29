@@ -9,6 +9,7 @@ Run them from this repo once the extension is installed.
 | `02-qa-login` | QA a login flow and prove it worked with a screenshot | serve mode, see below |
 | `03-report-to-pdf` | Render a CFML-built HTML report to PDF and PNG | `rustcfml examples/03-report-to-pdf/main.cfm` |
 | `04-visual-check` | Detect a blank render, sweep viewports, and diff against a layout baseline | `rustcfml examples/04-visual-check/main.cfm` |
+| `05-testbox` | Browser tests in TestBox: fill a form, assert on JS-rendered output | `examples/05-testbox/run.sh` |
 
 `02-qa-login` drives the browser at the server running it, and the renderer
 refuses private addresses unless you opt in:

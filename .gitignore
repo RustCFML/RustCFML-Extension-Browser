@@ -1,0 +1,7 @@
+/target
+*.rcx
+shot.png
+out.pdf
+Cargo.lock
+# Playwright MCP drops page snapshots here when a browser is driven from the repo root.
+.playwright-mcp/

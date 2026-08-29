@@ -1,0 +1,7 @@
+<!doctype html><html><head><title>one</title></head><body>
+<h1>Page One</h1><a id="go" href="two.html">to two</a>
+<script>
+console.log("hello from page one");
+console.warn("a warning", {a:1});
+setTimeout(function(){ notDefined(); }, 50);   // uncaught error
+</script></body></html>

@@ -1,0 +1,26 @@
+<!doctype html><html><head><title>app</title></head><body>
+<div id="root">loading…</div>
+<script>
+  // Deliberately late, like a hydrating SPA.
+  setTimeout(function () {
+    document.getElementById('root').innerHTML =
+      '<form id="f"><input id="q" placeholder="search"><select id="s">' +
+      '<option value="a">A</option><option value="b">B</option></select>' +
+      '<button type="button" id="go">Go</button></form><ul id="out"></ul>';
+    var out = document.getElementById('out');
+    // Only reacts to input events — an el.value assignment alone is invisible.
+    document.getElementById('q').addEventListener('input', function (e) {
+      out.innerHTML = '<li class="r">typed:' + e.target.value + '</li>';
+    });
+    document.getElementById('s').addEventListener('change', function (e) {
+      out.innerHTML += '<li class="r">picked:' + e.target.value + '</li>';
+    });
+    document.getElementById('go').addEventListener('click', function () {
+      out.innerHTML += '<li class="r">clicked</li>';
+    });
+    document.getElementById('q').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') out.innerHTML += '<li class="r">enter</li>';
+    });
+  }, 400);
+</script>
+</body></html>

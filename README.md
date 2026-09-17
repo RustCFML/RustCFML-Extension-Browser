@@ -27,39 +27,44 @@ complete layout and paint engine.
 
 ## Building
 
-This repo has no vendored dependencies: it builds against a checkout of the
-obscura fork, which must sit in the same tree.
-
-```
-<root>/
-  CFMLs/
-    RustCFML/              the engine (for crates/rustcfml-module)
-    rustcfml-browser/      this repo
-  THIRDPARTY/
-    obscura/               the fork
-```
-
 ```sh
 rustcfml ext build .
 rustcfml ext install browser-0.1.0.rcx --user
 ./tests/run.sh
 ```
 
-Two things about the obscura checkout that are not optional:
+That is the whole of it. Obscura comes from our fork as a git dependency
+pinned to a tag, so no sibling checkout is needed and everyone builds the same
+engine:
 
-- **It must carry the outstanding render fixes.** Stock obscura resolves a
-  functional `flex-basis` context-free, so `calc(100% - 314px)` becomes a zero
-  basis and any flex item using one collapses to its min-content width. Real
-  sites lay out wrong in ways that look like a dropped `width`. Fixes are
-  upstream as [#749](https://github.com/h4ckf0r0day/obscura/pull/749) and
-  [#750](https://github.com/h4ckf0r0day/obscura/pull/750); until they merge, the
-  path deps become git deps pinned to a tag rather than sooner.
+```toml
+obscura-render = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1", features = ["paint"] }
+```
+
+Two things about that dependency that are not optional:
+
+- **It must carry the outstanding render fixes**, which is why it is the fork
+  and not upstream. Stock obscura resolves a functional `flex-basis`
+  context-free, so `calc(100% - 314px)` becomes a zero basis and any flex item
+  using one collapses to its min-content width. Real sites lay out wrong in
+  ways that look like a dropped `width`. Fixes are upstream as
+  [#749](https://github.com/h4ckf0r0day/obscura/pull/749) and
+  [#750](https://github.com/h4ckf0r0day/obscura/pull/750), unreviewed since
+  August; the tag carries them, along with the private-network egress guard for
+  render-side resource fetches and the inline-layout fixes behind
+  `<picture>`/`width:100%` images.
+
+  To move to a newer engine, tag the fork and bump the tag in the six
+  `obscura-*` lines and the two `[patch.crates-io]` lines together — they must
+  all name the same tag, or the patched crates and the crates using them come
+  from different checkouts.
 - **`obscura-render` needs the vendored taffy and cosmic-text**, hence the
   `[patch.crates-io]` block. Stock taffy 0.12.1 lacks `set_calc_resolver`,
   `item_aspect_ratio_is_intrinsic` and `AlignItemsKeyword::Normal`. Cargo
   *silently ignores* a patch whose version matches but whose features do not —
   it warns and carries on — and the failure surfaces as a wall of type errors
-  inside a third-party crate.
+  inside a third-party crate. They are vendored *inside* the obscura repo, so
+  the patch entries point at the same fork and tag as everything else.
 
 ## What it is good at
 

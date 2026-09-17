@@ -10,20 +10,20 @@ crate-type = ["cdylib", "rlib"]
 # The extension ABI wrapper — the ONLY RustCFML dependency.
 rustcfml-module = { path = "../RustCFML/crates/rustcfml-module" }
 
-# Obscura. Repo-relative path deps: this repo and the obscura fork must sit in
-# the same tree (see "Building" in the README). They become git deps pinned to a
-# tag once the outstanding render fixes are upstream — they are not yet, and
-# building against stock obscura gives you a broken flex layout.
-obscura-dom     = { path = "../../THIRDPARTY/obscura/crates/obscura-dom" }
-obscura-net     = { path = "../../THIRDPARTY/obscura/crates/obscura-net" }
-obscura-js      = { path = "../../THIRDPARTY/obscura/crates/obscura-js" }
-obscura-browser = { path = "../../THIRDPARTY/obscura/crates/obscura-browser", features = ["render"] }
-obscura-render  = { path = "../../THIRDPARTY/obscura/crates/obscura-render", features = ["paint"] }
+# Obscura, from our fork, pinned to a tag. The render and CSSOM fixes this
+# needs are still open upstream, and building against stock obscura gives you a
+# broken flex layout, so the fork carries upstream plus those fixes rather than
+# this repo waiting on a merge. No sibling checkout is required any more.
+obscura-dom     = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }
+obscura-net     = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }
+obscura-js      = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }
+obscura-browser = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1", features = ["render"] }
+obscura-render  = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1", features = ["paint"] }
 # "render" is not optional in practice: without it the CDP server answers
 # Page.captureScreenshot, Page.printToPDF and the whole screencast domain with
 # "requires a build with the render feature". An agent connecting to us would
 # find it could drive the page but never see it.
-obscura-cdp     = { path = "../../THIRDPARTY/obscura/crates/obscura-cdp", features = ["render"] }
+obscura-cdp     = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1", features = ["render"] }
 
 tokio       = { version = "1", features = ["rt", "sync", "time", "macros"] }
 serde_json  = "1"
@@ -49,6 +49,11 @@ panic = "unwind"
 # AlignItemsKeyword::Normal, none of which exist upstream. Cargo SILENTLY IGNORES
 # a patch whose version matches but whose features do not (it warns and moves
 # on), and the failure surfaces as a wall of type errors inside obscura-render.
+# obscura-render needs the vendored taffy and cosmic-text: stock taffy 0.12.1
+# lacks `set_calc_resolver`, `item_aspect_ratio_is_intrinsic` and
+# `AlignItemsKeyword::Normal`. A `[patch]` in a dependency's own manifest is
+# ignored, so the top-level crate has to repeat obscura's -- from the same
+# fork, so the patched crates and the crates using them stay in step.
 [patch.crates-io]
-taffy       = { path = "../../THIRDPARTY/obscura/vendor/taffy" }
-cosmic-text = { path = "../../THIRDPARTY/obscura/vendor/cosmic-text" }
+taffy       = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }
+cosmic-text = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }

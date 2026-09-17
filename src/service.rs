@@ -906,6 +906,14 @@ async fn dispatch(
                                         Some(r) => InterceptResolution::Fulfill {
                                             status: r.status,
                                             headers: r.headers.into_iter().collect(),
+                                            // A mock body arrives as CFML text, so the
+                                            // base64 view is derived from it rather than
+                                            // carried through as it is on the CDP path,
+                                            // where the body is already base64 (#912).
+                                            body_base64: base64::Engine::encode(
+                                                &base64::engine::general_purpose::STANDARD,
+                                                r.body.as_bytes(),
+                                            ),
                                             body: r.body,
                                         },
                                         // Anything unmatched must go through

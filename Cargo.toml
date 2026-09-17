@@ -29,6 +29,10 @@ tokio       = { version = "1", features = ["rt", "sync", "time", "macros"] }
 serde_json  = "1"
 # PNG decode only, for the ink-coverage post-condition.
 image       = { version = "0.25", default-features = false, features = ["png"] }
+# mock() bodies are CFML text; obscura's InterceptResolution::Fulfill also wants
+# the exact bytes as base64 (obscura #912) so a binary fulfill is not corrupted
+# by a lossy UTF-8 round trip. Already in the tree via obscura-render.
+base64      = "0.22"
 url         = "2"
 htmd = "0.5.5"
 

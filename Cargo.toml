@@ -14,16 +14,16 @@ rustcfml-module = { path = "../RustCFML/crates/rustcfml-module" }
 # needs are still open upstream, and building against stock obscura gives you a
 # broken flex layout, so the fork carries upstream plus those fixes rather than
 # this repo waiting on a merge. No sibling checkout is required any more.
-obscura-dom     = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }
-obscura-net     = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }
-obscura-js      = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }
-obscura-browser = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1", features = ["render"] }
-obscura-render  = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1", features = ["paint"] }
+obscura-dom     = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.3-ri.1" }
+obscura-net     = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.3-ri.1" }
+obscura-js      = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.3-ri.1" }
+obscura-browser = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.3-ri.1", features = ["render"] }
+obscura-render  = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.3-ri.1", features = ["paint"] }
 # "render" is not optional in practice: without it the CDP server answers
 # Page.captureScreenshot, Page.printToPDF and the whole screencast domain with
 # "requires a build with the render feature". An agent connecting to us would
 # find it could drive the page but never see it.
-obscura-cdp     = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1", features = ["render"] }
+obscura-cdp     = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.3-ri.1", features = ["render"] }
 
 tokio       = { version = "1", features = ["rt", "sync", "time", "macros"] }
 serde_json  = "1"
@@ -55,5 +55,5 @@ panic = "unwind"
 # ignored, so the top-level crate has to repeat obscura's -- from the same
 # fork, so the patched crates and the crates using them stay in step.
 [patch.crates-io]
-taffy       = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }
-cosmic-text = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1" }
+taffy       = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.3-ri.1" }
+cosmic-text = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.3-ri.1" }

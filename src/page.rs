@@ -22,7 +22,11 @@ pub struct CfmlPage {
 
 impl CfmlPage {
     pub fn new(id: PageId, timeout_ms: u64) -> Self {
-        Self { id, closed: AtomicBool::new(false), timeout_ms }
+        Self {
+            id,
+            closed: AtomicBool::new(false),
+            timeout_ms,
+        }
     }
 
     fn budget(&self) -> Duration {
@@ -39,7 +43,14 @@ impl CfmlPage {
     fn query(&self, kind: Query) -> Result<QueryOut> {
         self.live()?;
         service()
-            .call(|reply| Cmd::Query { page: self.id, kind, reply }, self.budget())
+            .call(
+                |reply| Cmd::Query {
+                    page: self.id,
+                    kind,
+                    reply,
+                },
+                self.budget(),
+            )
             .map_err(Error::new)
     }
 }
@@ -51,7 +62,11 @@ impl CfmlPage {
         self.live()?;
         let out = service()
             .call(
-                |reply| Cmd::Evaluate { page: self.id, script: js, reply },
+                |reply| Cmd::Evaluate {
+                    page: self.id,
+                    script: js,
+                    reply,
+                },
                 self.budget(),
             )
             .map_err(|e| Error::custom("browser.javascript", e))?;
@@ -86,17 +101,29 @@ impl Drop for CfmlPage {
 
 fn opt_str(v: &Value, key: &str) -> Option<String> {
     let f = v.key(key);
-    if f.is_null() { None } else { Some(f.to_string()) }
+    if f.is_null() {
+        None
+    } else {
+        Some(f.to_string())
+    }
 }
 
 fn opt_f32(v: &Value, key: &str) -> Option<f32> {
     let f = v.key(key);
-    if f.is_null() { None } else { f.as_f64().ok().map(|d| d as f32) }
+    if f.is_null() {
+        None
+    } else {
+        f.as_f64().ok().map(|d| d as f32)
+    }
 }
 
 fn opt_bool(v: &Value, key: &str) -> Option<bool> {
     let f = v.key(key);
-    if f.is_null() { None } else { Some(f.as_bool().unwrap_or(false)) }
+    if f.is_null() {
+        None
+    } else {
+        Some(f.as_bool().unwrap_or(false))
+    }
 }
 
 impl NativeClass for CfmlPage {
@@ -157,7 +184,12 @@ impl NativeClass for CfmlPage {
                 let until = wait_until(&until)?;
                 service()
                     .call(
-                        |reply| Cmd::Goto { page: self.id, url, wait_until: until, reply },
+                        |reply| Cmd::Goto {
+                            page: self.id,
+                            url,
+                            wait_until: until,
+                            reply,
+                        },
                         self.budget(),
                     )
                     .map_err(Error::new)?;
@@ -206,7 +238,11 @@ impl NativeClass for CfmlPage {
                     .max(0) as u64;
                 service()
                     .call(
-                        |reply| Cmd::Settle { page: self.id, max_ms: ms, reply },
+                        |reply| Cmd::Settle {
+                            page: self.id,
+                            max_ms: ms,
+                            reply,
+                        },
                         Duration::from_millis(ms + 10_000),
                     )
                     .map_err(Error::new)?;
@@ -218,7 +254,12 @@ impl NativeClass for CfmlPage {
                 let h = args.get(1).and_then(|v| v.as_f64().ok()).unwrap_or(800.0) as f32;
                 service()
                     .call(
-                        |reply| Cmd::SetViewport { page: self.id, width: w, height: h, reply },
+                        |reply| Cmd::SetViewport {
+                            page: self.id,
+                            width: w,
+                            height: h,
+                            reply,
+                        },
                         self.budget(),
                     )
                     .map_err(Error::new)?;
@@ -290,10 +331,7 @@ impl NativeClass for CfmlPage {
             }
             "press" => {
                 let key = args.first().map(|v| v.to_string()).unwrap_or_default();
-                let sel = args
-                    .get(1)
-                    .filter(|v| !v.is_null())
-                    .map(|v| v.to_string());
+                let sel = args.get(1).filter(|v| !v.is_null()).map(|v| v.to_string());
                 let target = match &sel {
                     Some(s) => format!("document.querySelector({})", js_str(s)),
                     None => "(document.activeElement || document.body)".to_string(),
@@ -338,7 +376,11 @@ impl NativeClass for CfmlPage {
                 };
                 service()
                     .call(
-                        |reply| Cmd::History { page: self.id, delta, reply },
+                        |reply| Cmd::History {
+                            page: self.id,
+                            delta,
+                            reply,
+                        },
                         self.budget(),
                     )
                     .map_err(Error::new)?;
@@ -369,7 +411,13 @@ impl NativeClass for CfmlPage {
             "url" | "title" | "content" => {
                 self.live()?;
                 let snap = service()
-                    .call(|reply| Cmd::Snapshot { page: self.id, reply }, self.budget())
+                    .call(
+                        |reply| Cmd::Snapshot {
+                            page: self.id,
+                            reply,
+                        },
+                        self.budget(),
+                    )
                     .map_err(Error::new)?;
                 Ok(ctx.string(match method.to_ascii_lowercase().as_str() {
                     "url" => snap.url,
@@ -383,7 +431,13 @@ impl NativeClass for CfmlPage {
                     None => {
                         self.live()?;
                         let snap = service()
-                            .call(|reply| Cmd::Snapshot { page: self.id, reply }, self.budget())
+                            .call(
+                                |reply| Cmd::Snapshot {
+                                    page: self.id,
+                                    reply,
+                                },
+                                self.budget(),
+                            )
                             .map_err(Error::new)?;
                         Ok(ctx.string(snap.text))
                     }
@@ -401,11 +455,15 @@ impl NativeClass for CfmlPage {
                     _ => Ok(ctx.null()),
                 }
             }
-            "count" => match self.query(Query::Count(args.first().map(|v| v.to_string()).unwrap_or_default()))? {
+            "count" => match self.query(Query::Count(
+                args.first().map(|v| v.to_string()).unwrap_or_default(),
+            ))? {
                 QueryOut::Count(n) => Ok(ctx.int(n as i64)),
                 _ => Ok(ctx.int(0)),
             },
-            "exists" => match self.query(Query::Count(args.first().map(|v| v.to_string()).unwrap_or_default()))? {
+            "exists" => match self.query(Query::Count(
+                args.first().map(|v| v.to_string()).unwrap_or_default(),
+            ))? {
                 QueryOut::Count(n) => Ok(ctx.bool(n > 0)),
                 _ => Ok(ctx.bool(false)),
             },
@@ -419,7 +477,9 @@ impl NativeClass for CfmlPage {
                 }
                 _ => Ok(ctx.array()),
             },
-            "extract" => match self.query(Query::Extract(args.first().map(|v| v.to_string()).unwrap_or_default()))? {
+            "extract" => match self.query(Query::Extract(
+                args.first().map(|v| v.to_string()).unwrap_or_default(),
+            ))? {
                 QueryOut::Rows(rows) => {
                     let arr = ctx.array_with_capacity(rows.len());
                     for (i, (text, attrs)) in rows.into_iter().enumerate() {
@@ -440,7 +500,13 @@ impl NativeClass for CfmlPage {
                 // is cruder, and routing through it would make markdown output
                 // depend on which build you installed.
                 let snap = service()
-                    .call(|reply| Cmd::Snapshot { page: self.id, reply }, self.budget())
+                    .call(
+                        |reply| Cmd::Snapshot {
+                            page: self.id,
+                            reply,
+                        },
+                        self.budget(),
+                    )
                     .map_err(Error::new)?;
                 let html = match args.first().filter(|v| !v.is_null()) {
                     // The document, not <body>, would carry <head> through: the
@@ -448,7 +514,8 @@ impl NativeClass for CfmlPage {
                     // above the content. Same trap as text() — reach for the
                     // rendered subtree, never the document.
                     None => {
-                        let js = "(function(){return document.body?document.body.outerHTML:null;})()";
+                        let js =
+                            "(function(){return document.body?document.body.outerHTML:null;})()";
                         let v = service()
                             .call(
                                 |reply| Cmd::Evaluate {
@@ -470,7 +537,11 @@ impl NativeClass for CfmlPage {
                         );
                         let v = service()
                             .call(
-                                |reply| Cmd::Evaluate { page: self.id, script: js, reply },
+                                |reply| Cmd::Evaluate {
+                                    page: self.id,
+                                    script: js,
+                                    reply,
+                                },
                                 self.budget(),
                             )
                             .map_err(Error::new)?;
@@ -502,7 +573,11 @@ impl NativeClass for CfmlPage {
                 );
                 let v = service()
                     .call(
-                        |reply| Cmd::Evaluate { page: self.id, script: js, reply },
+                        |reply| Cmd::Evaluate {
+                            page: self.id,
+                            script: js,
+                            reply,
+                        },
                         self.budget(),
                     )
                     .map_err(Error::new)?;
@@ -529,7 +604,11 @@ impl NativeClass for CfmlPage {
                 }
                 service()
                     .call(
-                        |reply| Cmd::Block { page: self.id, patterns, reply },
+                        |reply| Cmd::Block {
+                            page: self.id,
+                            patterns,
+                            reply,
+                        },
                         self.budget(),
                     )
                     .map_err(Error::new)?;
@@ -573,21 +652,33 @@ impl NativeClass for CfmlPage {
                         headers.push((k.to_string(), h.key(k).to_string()));
                     }
                 }
-                if !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-type")) {
+                if !headers
+                    .iter()
+                    .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+                {
                     // Guess from the body so the common case — mocking a JSON
                     // endpoint — does not need a headers struct every time.
-                    let looks_json = body.trim_start().starts_with('{')
-                        || body.trim_start().starts_with('[');
+                    let looks_json =
+                        body.trim_start().starts_with('{') || body.trim_start().starts_with('[');
                     headers.push((
                         "content-type".into(),
-                        if looks_json { "application/json".into() } else { "text/plain".into() },
+                        if looks_json {
+                            "application/json".into()
+                        } else {
+                            "text/plain".into()
+                        },
                     ));
                 }
                 service()
                     .call(
                         |reply| Cmd::Mock {
                             page: self.id,
-                            rule: crate::service::MockRule { pattern, status, headers, body },
+                            rule: crate::service::MockRule {
+                                pattern,
+                                status,
+                                headers,
+                                body,
+                            },
                             reply,
                         },
                         self.budget(),
@@ -598,7 +689,13 @@ impl NativeClass for CfmlPage {
             "requests" => {
                 self.live()?;
                 let rows = service()
-                    .call(|reply| Cmd::Network { page: self.id, reply }, self.budget())
+                    .call(
+                        |reply| Cmd::Network {
+                            page: self.id,
+                            reply,
+                        },
+                        self.budget(),
+                    )
                     .map_err(Error::new)?;
                 let arr = ctx.array_with_capacity(rows.len());
                 for (i, r) in rows.into_iter().enumerate() {
@@ -665,7 +762,11 @@ impl NativeClass for CfmlPage {
                     .ok_or_else(|| Error::new("evaluate() needs a script"))?;
                 let json = service()
                     .call(
-                        |reply| Cmd::Evaluate { page: self.id, script, reply },
+                        |reply| Cmd::Evaluate {
+                            page: self.id,
+                            script,
+                            reply,
+                        },
                         self.budget(),
                     )
                     .map_err(|e| Error::custom("browser.javascript", e))?;
@@ -719,11 +820,21 @@ impl NativeClass for CfmlPage {
                         opts.paper_width_in = w;
                         opts.paper_height_in = h;
                     }
-                    if let Some(v) = opt_f32(o, "paperWidth") { opts.paper_width_in = v; }
-                    if let Some(v) = opt_f32(o, "paperHeight") { opts.paper_height_in = v; }
-                    if let Some(v) = opt_bool(o, "landscape") { opts.landscape = v; }
-                    if let Some(v) = opt_bool(o, "printBackground") { opts.print_background = v; }
-                    if let Some(v) = opt_f32(o, "scale") { opts.scale = v; }
+                    if let Some(v) = opt_f32(o, "paperWidth") {
+                        opts.paper_width_in = v;
+                    }
+                    if let Some(v) = opt_f32(o, "paperHeight") {
+                        opts.paper_height_in = v;
+                    }
+                    if let Some(v) = opt_bool(o, "landscape") {
+                        opts.landscape = v;
+                    }
+                    if let Some(v) = opt_bool(o, "printBackground") {
+                        opts.print_background = v;
+                    }
+                    if let Some(v) = opt_f32(o, "scale") {
+                        opts.scale = v;
+                    }
                     if let Some(v) = opt_f32(o, "margin") {
                         opts.margin_top_in = v;
                         opts.margin_bottom_in = v;
@@ -737,7 +848,11 @@ impl NativeClass for CfmlPage {
                 }
                 let pdf = service()
                     .call(
-                        |reply| Cmd::Pdf { page: self.id, options: Box::new(opts.clone()), reply },
+                        |reply| Cmd::Pdf {
+                            page: self.id,
+                            options: Box::new(opts.clone()),
+                            reply,
+                        },
                         self.budget(),
                     )
                     .map_err(Error::new)?;
@@ -775,13 +890,34 @@ fn parse_ranges(spec: &str) -> Result<Vec<RasterPdfPageRange>> {
         let range = match part.split_once('-') {
             None => {
                 let n = part.parse::<usize>().map_err(|_| {
-                    Error::new(format!("bad page range [{part}] — expected a number or 'from-to'"))
+                    Error::new(format!(
+                        "bad page range [{part}] — expected a number or 'from-to'"
+                    ))
                 })?;
-                RasterPdfPageRange { start: Some(n), end: Some(n) }
+                RasterPdfPageRange {
+                    start: Some(n),
+                    end: Some(n),
+                }
             }
             Some((a, b)) => RasterPdfPageRange {
-                start: if a.trim().is_empty() { None } else { Some(a.trim().parse().map_err(|_| Error::new(format!("bad page range [{part}]")))?) },
-                end: if b.trim().is_empty() { None } else { Some(b.trim().parse().map_err(|_| Error::new(format!("bad page range [{part}]")))?) },
+                start: if a.trim().is_empty() {
+                    None
+                } else {
+                    Some(
+                        a.trim()
+                            .parse()
+                            .map_err(|_| Error::new(format!("bad page range [{part}]")))?,
+                    )
+                },
+                end: if b.trim().is_empty() {
+                    None
+                } else {
+                    Some(
+                        b.trim()
+                            .parse()
+                            .map_err(|_| Error::new(format!("bad page range [{part}]")))?,
+                    )
+                },
             },
         };
         out.push(range);

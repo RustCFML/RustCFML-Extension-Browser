@@ -65,6 +65,10 @@ pub type BrowserId = u64;
 /// re-exported from the crate root. Keep in step with upstream.
 pub const MAX_CAPTURE_PIXELS: f32 = 16.0 * 1024.0 * 1024.0;
 
+/// A capture's PNG bytes, the document height that was actually rendered, and
+/// whether the capture was truncated by the pixel budget.
+type CaptureReply = (Vec<u8>, f32, bool);
+
 /// What CFML asks the service thread to do. One variant per operation; the
 /// reply channel is part of the message so the thread never needs a registry of
 /// waiting callers.
@@ -126,7 +130,7 @@ pub enum Cmd {
         full_page: bool,
         /// Reports the height actually captured, so a truncated full-page
         /// capture is visible to the caller instead of silently short.
-        reply: Sender<Result<(Vec<u8>, f32, bool), String>>,
+        reply: Sender<Result<CaptureReply, String>>,
     },
     Pdf {
         page: PageId,
@@ -381,7 +385,7 @@ fn run(mut rx: tokio::sync::mpsc::UnboundedReceiver<Cmd>) {
         let mut mocks: HashMap<PageId, std::rc::Rc<std::cell::RefCell<Vec<MockRule>>>> =
             HashMap::new();
         let mut servers: HashMap<u16, tokio::task::JoinHandle<()>> = HashMap::new();
-            // Pages whose subresources have already been pulled through the page
+        // Pages whose subresources have already been pulled through the page
         // transport since their last navigation. Re-preparing on every capture
         // cost ~5s per frame on an image-heavy page, because resources that
         // failed are deliberately not negative-cached so a later warmup can
@@ -472,7 +476,11 @@ async fn dispatch(
             };
             let _ = reply.send(result);
         }
-        Cmd::SetCookies { browser, cookies, reply } => {
+        Cmd::SetCookies {
+            browser,
+            cookies,
+            reply,
+        } => {
             let result = match contexts.get(&browser) {
                 Some((ctx, _)) => {
                     ctx.cookie_jar.set_cookies_from_cdp(
@@ -584,13 +592,21 @@ async fn dispatch(
                 Some(p) => {
                     let base = p.url_string();
                     p.with_dom(|dom| match &kind {
-                        Query::Text(sel) => crate::dom_util::select_text(dom, sel).map(QueryOut::Text),
-                        Query::Count(sel) => crate::dom_util::select_count(dom, sel).map(QueryOut::Count),
+                        Query::Text(sel) => {
+                            crate::dom_util::select_text(dom, sel).map(QueryOut::Text)
+                        }
+                        Query::Count(sel) => {
+                            crate::dom_util::select_count(dom, sel).map(QueryOut::Count)
+                        }
                         Query::Attr(sel, a) => {
                             crate::dom_util::select_attr(dom, sel, a).map(QueryOut::Text)
                         }
-                        Query::Extract(sel) => crate::dom_util::extract(dom, sel).map(QueryOut::Rows),
-                        Query::Links => Ok(QueryOut::List(crate::dom_util::links(dom, Some(&base)))),
+                        Query::Extract(sel) => {
+                            crate::dom_util::extract(dom, sel).map(QueryOut::Rows)
+                        }
+                        Query::Links => {
+                            Ok(QueryOut::List(crate::dom_util::links(dom, Some(&base))))
+                        }
                     })
                     .unwrap_or_else(|| Err("page has no document yet — call goto() first".into()))
                 }
@@ -598,7 +614,11 @@ async fn dispatch(
             };
             let _ = reply.send(result);
         }
-        Cmd::Evaluate { page, script, reply } => {
+        Cmd::Evaluate {
+            page,
+            script,
+            reply,
+        } => {
             let result = match pages.get_mut(&page) {
                 Some(p) => {
                     // BOTH Page::evaluate and Page::evaluate_for_cdp swallow a
@@ -634,7 +654,13 @@ async fn dispatch(
             };
             let _ = reply.send(result);
         }
-        Cmd::Screenshot { page, width, height, full_page, reply } => {
+        Cmd::Screenshot {
+            page,
+            width,
+            height,
+            full_page,
+            reply,
+        } => {
             let result = match pages.get_mut(&page) {
                 Some(p) => {
                     // Pull subresources through the page transport, so paint
@@ -707,7 +733,11 @@ async fn dispatch(
             };
             let _ = reply.send(result);
         }
-        Cmd::Pdf { page, options, reply } => {
+        Cmd::Pdf {
+            page,
+            options,
+            reply,
+        } => {
             let result = match pages.get_mut(&page) {
                 Some(p) => {
                     if prepared.insert(page) {
@@ -720,14 +750,24 @@ async fn dispatch(
             };
             let _ = reply.send(result);
         }
-        Cmd::WaitFor { page, cond, timeout_ms, poll_ms, reply } => {
+        Cmd::WaitFor {
+            page,
+            cond,
+            timeout_ms,
+            poll_ms,
+            reply,
+        } => {
             let result = match pages.get_mut(&page) {
                 Some(p) => wait_for(p, &cond, timeout_ms, poll_ms).await,
                 None => Err(format!("page {page} is closed")),
             };
             let _ = reply.send(result);
         }
-        Cmd::Settle { page, max_ms, reply } => {
+        Cmd::Settle {
+            page,
+            max_ms,
+            reply,
+        } => {
             let result = match pages.get_mut(&page) {
                 Some(p) => {
                     p.settle(max_ms).await;
@@ -737,7 +777,12 @@ async fn dispatch(
             };
             let _ = reply.send(result);
         }
-        Cmd::SetViewport { page, width, height, reply } => {
+        Cmd::SetViewport {
+            page,
+            width,
+            height,
+            reply,
+        } => {
             let result = match pages.get_mut(&page) {
                 Some(p) => {
                     p.set_viewport((width, height));
@@ -747,7 +792,11 @@ async fn dispatch(
             };
             let _ = reply.send(result);
         }
-        Cmd::Block { page, patterns, reply } => {
+        Cmd::Block {
+            page,
+            patterns,
+            reply,
+        } => {
             let result = match pages.get_mut(&page) {
                 Some(p) => {
                     blocked.insert(page, patterns.clone());
@@ -831,7 +880,9 @@ async fn dispatch(
         }
         Cmd::StartServer { port, reply } => {
             if servers.contains_key(&port) {
-                let _ = reply.send(Err(format!("a browser server is already running on {port}")));
+                let _ = reply.send(Err(format!(
+                    "a browser server is already running on {port}"
+                )));
                 return;
             }
             // Bind first, so "port already in use" is an error the caller sees
@@ -1018,9 +1069,9 @@ async fn wait_for(
         }
         if tokio::time::Instant::now() >= deadline {
             return Err(match cond {
-                WaitCond::Selector(s) => format!(
-                    "timed out after {timeout_ms}ms waiting for selector [{s}]"
-                ),
+                WaitCond::Selector(s) => {
+                    format!("timed out after {timeout_ms}ms waiting for selector [{s}]")
+                }
                 WaitCond::Text(t) => {
                     format!("timed out after {timeout_ms}ms waiting for text [{t}]")
                 }

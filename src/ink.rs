@@ -25,8 +25,5 @@ pub fn coverage(png: &[u8]) -> (f64, usize) {
         *counts.entry(px.0).or_insert(0) += 1;
     }
     let dominant = counts.values().copied().max().unwrap_or(0);
-    (
-        (total - dominant) as f64 / total as f64,
-        counts.len(),
-    )
+    ((total - dominant) as f64 / total as f64, counts.len())
 }

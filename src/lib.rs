@@ -64,7 +64,10 @@ fn browser_fetch<'a>(ctx: &'a Ctx, args: &[Value<'a>]) -> Result<Value<'a>> {
     // anything else in the process.
     let browser = svc
         .call(
-            |reply| Cmd::NewBrowser { opts: Box::default(), reply },
+            |reply| Cmd::NewBrowser {
+                opts: Box::default(),
+                reply,
+            },
             budget,
         )
         .map_err(Error::new)?;
@@ -156,7 +159,10 @@ impl rustcfml_module::NativeClass for CfmlBrowser {
         };
         let id = service()
             .call(
-                |reply| Cmd::NewBrowser { opts: Box::new(opts), reply },
+                |reply| Cmd::NewBrowser {
+                    opts: Box::new(opts),
+                    reply,
+                },
                 std::time::Duration::from_millis(timeout_ms + 5_000),
             )
             .map_err(Error::new)?;
@@ -177,7 +183,10 @@ impl rustcfml_module::NativeClass for CfmlBrowser {
             "newpage" => {
                 let id = service()
                     .call(
-                        |reply| Cmd::NewPage { browser: self.id, reply },
+                        |reply| Cmd::NewPage {
+                            browser: self.id,
+                            reply,
+                        },
                         budget,
                     )
                     .map_err(Error::new)?;
@@ -187,7 +196,13 @@ impl rustcfml_module::NativeClass for CfmlBrowser {
             // log in once, keep the struct, skip the login next time.
             "cookies" => {
                 let rows = service()
-                    .call(|reply| Cmd::Cookies { browser: self.id, reply }, budget)
+                    .call(
+                        |reply| Cmd::Cookies {
+                            browser: self.id,
+                            reply,
+                        },
+                        budget,
+                    )
                     .map_err(Error::new)?;
                 let arr = ctx.array_with_capacity(rows.len());
                 for (i, c) in rows.into_iter().enumerate() {
@@ -210,26 +225,35 @@ impl rustcfml_module::NativeClass for CfmlBrowser {
             "setcookies" => {
                 let mut cookies = Vec::new();
                 if let Some(v) = args.first().filter(|v| !v.is_null()) {
-                    let n = v.len().map_err(|_| {
-                        Error::new("setCookies() takes an array of cookie structs")
-                    })?;
+                    let n = v
+                        .len()
+                        .map_err(|_| Error::new("setCookies() takes an array of cookie structs"))?;
                     for i in 0..n {
                         let c = v.get(i);
                         let s = |k: &str| {
                             let f = c.key(k);
-                            if f.is_null() { String::new() } else { f.to_string() }
+                            if f.is_null() {
+                                String::new()
+                            } else {
+                                f.to_string()
+                            }
                         };
                         let b = |k: &str| c.key(k).as_bool().unwrap_or(false);
                         if s("name").is_empty() {
                             return Err(Error::new(format!(
-                                "setCookies(): cookie {} has no name", i + 1
+                                "setCookies(): cookie {} has no name",
+                                i + 1
                             )));
                         }
                         cookies.push(service::CookieRow {
                             name: s("name"),
                             value: s("value"),
                             domain: s("domain"),
-                            path: if s("path").is_empty() { "/".into() } else { s("path") },
+                            path: if s("path").is_empty() {
+                                "/".into()
+                            } else {
+                                s("path")
+                            },
                             secure: b("secure"),
                             http_only: b("httpOnly"),
                             same_site: s("sameSite"),
@@ -239,7 +263,11 @@ impl rustcfml_module::NativeClass for CfmlBrowser {
                 }
                 service()
                     .call(
-                        |reply| Cmd::SetCookies { browser: self.id, cookies, reply },
+                        |reply| Cmd::SetCookies {
+                            browser: self.id,
+                            cookies,
+                            reply,
+                        },
                         budget,
                     )
                     .map_err(Error::new)?;
@@ -247,7 +275,13 @@ impl rustcfml_module::NativeClass for CfmlBrowser {
             }
             "clearcookies" => {
                 service()
-                    .call(|reply| Cmd::ClearCookies { browser: self.id, reply }, budget)
+                    .call(
+                        |reply| Cmd::ClearCookies {
+                            browser: self.id,
+                            reply,
+                        },
+                        budget,
+                    )
                     .map_err(Error::new)?;
                 Ok(ctx.this())
             }
@@ -262,7 +296,11 @@ impl rustcfml_module::NativeClass for CfmlBrowser {
 
 /// `Browser( [options] )`
 fn browser<'a>(ctx: &'a Ctx, args: &[Value<'a>]) -> Result<Value<'a>> {
-    Ok(ctx.new_object(<CfmlBrowser as rustcfml_module::NativeClass>::new(ctx, args)?))
+    Ok(
+        ctx.new_object(<CfmlBrowser as rustcfml_module::NativeClass>::new(
+            ctx, args,
+        )?),
+    )
 }
 
 /// `browserServer( "cdp", { port = 9222 } )`
@@ -279,7 +317,9 @@ impl rustcfml_module::NativeClass for CfmlServer {
     const CLASS_NAME: &'static str = "BrowserServer";
 
     fn new(_ctx: &Ctx, _args: &[Value]) -> Result<Self> {
-        Err(Error::new("start a server with browserServer( kind, options )"))
+        Err(Error::new(
+            "start a server with browserServer( kind, options )",
+        ))
     }
 
     fn method_params(method: &str) -> Option<&'static str> {
@@ -296,7 +336,10 @@ impl rustcfml_module::NativeClass for CfmlServer {
             "stop" => {
                 let stopped = service()
                     .call(
-                        |reply| Cmd::StopServer { port: self.port, reply },
+                        |reply| Cmd::StopServer {
+                            port: self.port,
+                            reply,
+                        },
                         std::time::Duration::from_millis(5_000),
                     )
                     .map_err(Error::new)?;
@@ -326,7 +369,9 @@ fn browser_server<'a>(ctx: &'a Ctx, args: &[Value<'a>]) -> Result<Value<'a>> {
         .and_then(|v| v.as_i64().ok())
         .unwrap_or(9222);
     if !(1..=65535).contains(&port) {
-        return Err(Error::new(format!("browserServer(): port {port} is out of range")));
+        return Err(Error::new(format!(
+            "browserServer(): port {port} is out of range"
+        )));
     }
     let port = port as u16;
     service()

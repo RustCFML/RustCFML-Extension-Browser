@@ -30,7 +30,8 @@ fn walk(dom: &DomTree, id: NodeId, out: &mut String) {
     if skip {
         return;
     }
-    if let Some(Some(text)) = dom.with_node(id, |n| n.text_content_of_text_node().map(str::to_owned))
+    if let Some(Some(text)) =
+        dom.with_node(id, |n| n.text_content_of_text_node().map(str::to_owned))
     {
         out.push_str(&text);
     }
@@ -41,8 +42,18 @@ fn walk(dom: &DomTree, id: NodeId, out: &mut String) {
                 .map(|q| {
                     matches!(
                         q.local.as_ref(),
-                        "p" | "div" | "br" | "li" | "tr" | "section" | "article"
-                            | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+                        "p" | "div"
+                            | "br"
+                            | "li"
+                            | "tr"
+                            | "section"
+                            | "article"
+                            | "h1"
+                            | "h2"
+                            | "h3"
+                            | "h4"
+                            | "h5"
+                            | "h6"
                     )
                 })
                 .unwrap_or(false)
@@ -110,8 +121,11 @@ pub fn select_attr(dom: &DomTree, selector: &str, attr: &str) -> Result<Option<S
         .flatten())
 }
 
+/// One matched element: its text plus every attribute it carries.
+pub type ExtractedRow = (String, Vec<(String, String)>);
+
 /// One struct per match: the element's text plus every attribute it carries.
-pub fn extract(dom: &DomTree, selector: &str) -> Result<Vec<(String, Vec<(String, String)>)>, String> {
+pub fn extract(dom: &DomTree, selector: &str) -> Result<Vec<ExtractedRow>, String> {
     let mut rows = Vec::new();
     for id in dom.query_selector_all(selector)? {
         let attrs = dom

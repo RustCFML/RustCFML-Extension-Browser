@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  # Kept in step with release.yml. See the note there on why this is pinned.
+  RUSTCFML_REF: v0.685.5
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: rustcfml-browser
+
+      # Sibling checkout, because Cargo.toml points at
+      # `../RustCFML/crates/rustcfml-module`. Obscura itself needs no checkout:
+      # it is a git dependency pinned to a tag of our fork.
+      - uses: actions/checkout@v5
+        with:
+          repository: RustCFML/RustCFML
+          ref: ${{ env.RUSTCFML_REF }}
+          path: RustCFML
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Obscura brings V8 and a full layout/paint engine; without a cache every
+      # push pays for all of it.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rustcfml-browser
+
+      - name: Format
+        working-directory: rustcfml-browser
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: rustcfml-browser
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        working-directory: rustcfml-browser
+        run: cargo test
+
+      # Packaging is a build step of its own and breaks on its own — a crate
+      # that compiles can still fail to produce a loadable .rcx. Catch it on
+      # the branch, not at the tag. The smoke script is the same one the
+      # release workflow runs; keeping them identical is the point.
+      - name: Package and load a .rcx
+        run: |
+          set -e
+          gh release download "$RUSTCFML_REF" \
+            --repo RustCFML/RustCFML \
+            --pattern 'rustcfml-linux-x86_64' \
+            --output engine
+          chmod +x engine
+          ./engine ext build rustcfml-browser
+          ./engine ext install "$(ls rustcfml-browser/*.rcx)"
+          ./engine ext list
+          ./engine rustcfml-browser/.github/smoke.cfm
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,177 @@
+name: Release Extension
+
+on:
+  push:
+    tags: ["v*"]
+  # Buildable on demand, so the artifacts can be produced and smoke-tested
+  # without cutting a tag first.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # The engine checkout this builds against.
+  #
+  # PINNED, not `main`. `rustcfml-module` is a PATH dependency (the wrapper is
+  # not on crates.io yet), so the engine tree IS a build input: an unpinned
+  # `main` would mean a tag of this repo produces different bytes depending on
+  # the day. It also documents the floor honestly — this is the oldest engine
+  # the produced .rcx is known to load into. Bump it deliberately.
+  #
+  # Obscura needs no equivalent: it is already pinned, as a git dependency on
+  # a tag of our fork, inside Cargo.toml itself.
+  RUSTCFML_REF: v0.685.5
+
+jobs:
+  # One job per platform, each producing a SINGLE-PLATFORM .rcx.
+  #
+  # `ext build` will happily merge a second platform's library into an existing
+  # archive (the "fat extension" shape); that is wrong to publish for a ~37 MB
+  # artifact carrying V8 and a paint engine. A fresh checkout has no prior
+  # .rcx, so each job packages exactly its own.
+  build:
+    strategy:
+      # Do not cancel siblings: obscura's own CI only ever builds Linux, so
+      # Windows in particular is unproven — a Windows-only fault should not
+      # destroy the evidence from three healthy targets.
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos-aarch64
+            engine: rustcfml-macos-aarch64
+            exe: ""
+          - os: ubuntu-latest
+            name: linux-x86_64
+            engine: rustcfml-linux-x86_64
+            exe: ""
+          - os: ubuntu-24.04-arm
+            name: linux-aarch64
+            engine: rustcfml-linux-aarch64
+            exe: ""
+          - os: windows-latest
+            name: windows-x86_64
+            engine: rustcfml-windows-x86_64.exe
+            exe: ".exe"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # Sibling checkouts, because Cargo.toml points at
+      # `../RustCFML/crates/rustcfml-module`.
+      - uses: actions/checkout@v5
+        with:
+          path: rustcfml-browser
+
+      - uses: actions/checkout@v5
+        with:
+          repository: RustCFML/RustCFML
+          ref: ${{ env.RUSTCFML_REF }}
+          path: RustCFML
+
+      # Plain `stable`, deliberately UNPINNED: an extension crosses the
+      # boundary as a C ABI over opaque handles, so it shares neither generics,
+      # layout, nor allocator with the host. Any rustc that can build a cdylib
+      # produces a loadable one.
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # The RELEASED engine binary, not one built from the checkout beside it.
+      # `ext build` embeds the host's own target triple and ABI major into the
+      # manifest, so the packaging tool must be the same engine an operator
+      # will install this into.
+      - name: Fetch the released engine
+        shell: bash
+        run: |
+          # NOT `--output rustcfml`: macOS and Windows runners have
+          # case-insensitive filesystems, so that name collides with the
+          # `RustCFML/` checkout and `gh` refuses. Name it something that
+          # cannot collide.
+          gh release download "$RUSTCFML_REF" \
+            --repo RustCFML/RustCFML \
+            --pattern '${{ matrix.engine }}' \
+            --output "engine${{ matrix.exe }}"
+          chmod +x "engine${{ matrix.exe }}"
+          ./engine${{ matrix.exe }} --version
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Build and package the .rcx
+        shell: bash
+        run: ./engine${{ matrix.exe }} ext build rustcfml-browser
+
+      # Loading it is the only check that means anything. A .rcx can be
+      # perfectly well-formed and still fail to load — a missing system
+      # library, a digest mismatch, an ABI major the host will not accept —
+      # and none of that is visible from packaging alone. The smoke script
+      # drives a real page offline: the engine bundles its fonts and the page
+      # is a local file, so this needs neither network nor system fonts.
+      - name: Install it into a stock engine and load it
+        shell: bash
+        run: |
+          set -e
+          RCX=$(ls rustcfml-browser/*.rcx)
+          ./engine${{ matrix.exe }} ext install "$RCX"
+          ./engine${{ matrix.exe }} ext list
+          ./engine${{ matrix.exe }} rustcfml-browser/.github/smoke.cfm
+
+      - name: Name the artifact for its platform
+        shell: bash
+        run: |
+          RCX=$(ls rustcfml-browser/*.rcx)
+          BASE=$(basename "$RCX" .rcx)
+          mkdir -p dist
+          cp "$RCX" "dist/${BASE}-${{ matrix.name }}.rcx"
+          ls -l dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.name }}
+          path: dist/*.rcx
+
+  release:
+    needs: build
+    # A manual run should still build and smoke-test everything; it just must
+    # not try to publish a release for a tag that does not exist.
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Collect
+        run: |
+          mkdir -p release
+          find artifacts -name '*.rcx' -exec cp {} release/ \;
+          ls -l release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          body: |
+            Install the file for **your platform** into a stock RustCFML engine:
+
+            ```sh
+            rustcfml ext install browser-<version>-linux-x86_64.rcx --user
+            rustcfml ext list
+            ```
+
+            …or drop it into your application's `extensions/` directory.
+
+            Each `.rcx` carries the library for one platform only (~37 MB: it
+            embeds V8 and a complete layout and paint engine). Install the
+            wrong one and the engine says so by name — it does not fail
+            silently.
+
+            Built against RustCFML `${{ env.RUSTCFML_REF }}`, which is also the
+            minimum engine version, and obscura from
+            [alexskinner/obscura](https://github.com/alexskinner/obscura) at
+            the tag recorded in `Cargo.toml`.
+          files: release/*

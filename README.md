@@ -18,12 +18,25 @@ Rust. It is not Chromium and does not aim to be — see **What it is good at**.
 
 ## Install
 
+Take the file for **your platform** from the
+[latest release](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/latest)
+and install it:
+
 ```sh
-rustcfml ext install browser-0.1.0.rcx --user
+rustcfml ext install browser-0.1.0-linux-x86_64.rcx --user
+rustcfml ext list
 ```
 
-One archive per platform; the file is ~35 MB because it carries V8 and a
-complete layout and paint engine.
+Current build (v0.1.0):
+[macos-aarch64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.1.0/browser-0.1.0-macos-aarch64.rcx) ·
+[linux-x86_64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.1.0/browser-0.1.0-linux-x86_64.rcx) ·
+[linux-aarch64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.1.0/browser-0.1.0-linux-aarch64.rcx) ·
+[windows-x86_64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.1.0/browser-0.1.0-windows-x86_64.rcx)
+
+…or drop it into your application's `extensions/` directory and check it into
+the project. Each archive carries the library for one platform only, and is
+~40 MB because it embeds V8 and a complete layout and paint engine. Requires
+RustCFML v0.685.5 or newer.
 
 ## Building
 

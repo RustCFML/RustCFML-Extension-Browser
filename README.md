@@ -38,6 +38,11 @@ the project. Each archive carries the library for one platform only, and is
 ~40 MB because it embeds V8 and a complete layout and paint engine. Requires
 RustCFML v0.685.5 or newer.
 
+New to `.rcx` extensions? The engine documentation covers
+[installing one](https://github.com/RustCFML/RustCFML/blob/main/docs/extensions.md#installing-one)
+— `--user` vs `--dir`, checking load status with `rustcfml ext list`, and the
+full search order for where extensions are found.
+
 ## Building
 
 ```sh

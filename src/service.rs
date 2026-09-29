@@ -242,12 +242,29 @@ pub struct NetRow {
     pub timestamp: f64,
 }
 
-#[derive(Default)]
 pub struct BrowserOpts {
     pub storage_dir: Option<std::path::PathBuf>,
     pub proxy: Option<String>,
     pub user_agent: Option<String>,
     pub stealth: bool,
+    /// Obscura refuses a `file://` navigation unless the context opts in. Its
+    /// default is off because a remote CDP client should not be able to read
+    /// the host's files; here the caller is CFML that can already read them,
+    /// and rendering a local report is a headline use, so it defaults on. A
+    /// page on a web origin still cannot hop into `file://` either way.
+    pub allow_file_access: bool,
+}
+
+impl Default for BrowserOpts {
+    fn default() -> Self {
+        Self {
+            storage_dir: None,
+            proxy: None,
+            user_agent: None,
+            stealth: false,
+            allow_file_access: true,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -435,13 +452,14 @@ async fn dispatch(
         Cmd::NewBrowser { opts, reply } => {
             let id = *next_browser;
             *next_browser += 1;
-            let ctx = BrowserContext::with_storage_full(
+            let mut ctx = BrowserContext::with_storage_full(
                 format!("rustcfml-{id}"),
                 opts.proxy.clone(),
                 opts.stealth,
                 opts.user_agent.clone(),
                 opts.storage_dir.clone(),
             );
+            ctx.allow_file_access = opts.allow_file_access;
             contexts.insert(id, (Arc::new(ctx), true));
             let _ = reply.send(Ok(id));
         }

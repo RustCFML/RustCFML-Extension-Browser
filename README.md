@@ -106,7 +106,9 @@ browserServer( "cdp", { port } )         // drive this engine with Playwright/Pu
 ```
 
 `Browser()` options: `timeout` (ms, default 30000), `storageDir`, `proxy`,
-`userAgent`, `stealth`.
+`userAgent`, `stealth`, `allowFileAccess` (default true; set false to refuse
+`file://` navigation, e.g. when the URL comes from a user). A page on a web
+origin can never navigate itself into `file://`, whatever this says.
 
 **Each `Browser()` is an isolated profile.** Cookies are per-browser, not
 per-process, so one request's login never leaks into another's.

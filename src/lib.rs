@@ -156,6 +156,11 @@ impl rustcfml_module::NativeClass for CfmlBrowser {
                 .filter(|v| !v.is_null())
                 .and_then(|v| v.as_bool().ok())
                 .unwrap_or(false),
+            allow_file_access: o
+                .map(|o| o.key("allowFileAccess"))
+                .filter(|v| !v.is_null())
+                .and_then(|v| v.as_bool().ok())
+                .unwrap_or(true),
         };
         let id = service()
             .call(

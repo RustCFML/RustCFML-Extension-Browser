@@ -17,7 +17,11 @@ use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use obscura_browser::{lifecycle::WaitUntil, page::Page, BrowserContext, InterceptResolution};
+use obscura_browser::{
+    lifecycle::WaitUntil,
+    page::{Page, PendingNavigationOutcome},
+    BrowserContext, InterceptResolution,
+};
 use std::sync::Arc;
 
 pub type PageId = u64;
@@ -64,6 +68,9 @@ pub type BrowserId = u64;
 /// Mirrors `obscura_render::paint::MAX_CAPTURE_PIXELS`, which is `pub` but not
 /// re-exported from the crate root. Keep in step with upstream.
 pub const MAX_CAPTURE_PIXELS: f32 = 16.0 * 1024.0 * 1024.0;
+
+/// How many page-initiated navigations in a row one command will follow.
+const MAX_PAGE_NAVIGATION_HOPS: usize = 5;
 
 /// A capture's PNG bytes, the document height that was actually rendered, and
 /// whether the capture was truncated by the pixel budget.
@@ -171,8 +178,8 @@ pub enum Cmd {
         page: PageId,
         reply: Sender<Result<Vec<NetRow>, String>>,
     },
-    /// Obscura exposes no history API, so these are JS plus a settle. reload
-    /// re-navigates instead, which is what a caller actually means by it.
+    /// back/forward walk the page's session history; reload re-navigates,
+    /// which is what a caller actually means by it.
     History {
         page: PageId,
         delta: i32,
@@ -393,10 +400,6 @@ fn run(mut rx: tokio::sync::mpsc::UnboundedReceiver<Cmd>) {
         // Verified: two navigations with a block in force, zero requests reach
         // the origin.
         let mut blocked: HashMap<PageId, Vec<String>> = HashMap::new();
-        // Our own history stack. Obscura keeps none that survives navigation —
-        // history.go(-1) is a no-op, so back() silently did nothing and left
-        // the caller on the page they asked to leave.
-        let mut history: HashMap<PageId, (Vec<String>, usize)> = HashMap::new();
         // Shared with the per-page interception pump running on this same
         // thread, so a later mock() is picked up without re-enabling anything.
         let mut mocks: HashMap<PageId, std::rc::Rc<std::cell::RefCell<Vec<MockRule>>>> =
@@ -420,7 +423,6 @@ fn run(mut rx: tokio::sync::mpsc::UnboundedReceiver<Cmd>) {
                 &mut pages,
                 &mut page_owner,
                 &mut blocked,
-                &mut history,
                 &mut mocks,
                 &mut servers,
                 &mut prepared,
@@ -441,7 +443,6 @@ async fn dispatch(
     pages: &mut HashMap<PageId, Page>,
     page_owner: &mut HashMap<PageId, BrowserId>,
     blocked: &mut HashMap<PageId, Vec<String>>,
-    history: &mut HashMap<PageId, (Vec<String>, usize)>,
     mocks: &mut HashMap<PageId, std::rc::Rc<std::cell::RefCell<Vec<MockRule>>>>,
     servers: &mut HashMap<u16, tokio::task::JoinHandle<()>>,
     prepared: &mut std::collections::HashSet<PageId>,
@@ -564,17 +565,6 @@ async fn dispatch(
                     // almost nothing on a scripted page.
                     if out.is_ok() {
                         prepared.remove(&page);
-                        let landed = p.url_string();
-                        let entry = history.entry(page).or_insert_with(|| (Vec::new(), 0));
-                        // A new navigation truncates anything ahead, exactly as
-                        // a browser does after going back and then elsewhere.
-                        if !entry.0.is_empty() {
-                            entry.0.truncate(entry.1 + 1);
-                        }
-                        if entry.0.last().map(|u| u != &landed).unwrap_or(true) {
-                            entry.0.push(landed);
-                            entry.1 = entry.0.len() - 1;
-                        }
                     }
                     out
                 }
@@ -650,6 +640,13 @@ async fn dispatch(
                         "(async () => {{ try {{ return {{ __ok: true, v: await ({script}) }}; }}                          catch (e) {{ return {{ __ok: false, e: String((e && e.stack) || e) }}; }} }})()"
                     );
                     let info = p.evaluate_for_cdp(&wrapped, true, true).await;
+                    // Every interaction (click, fill, press, selectOption) is a
+                    // script, so this is where a clicked link or a submitted form
+                    // actually leaves the page.
+                    if let Err(e) = follow_page_navigations(p, page, prepared).await {
+                        let _ = reply.send(Err(e));
+                        return;
+                    }
                     match info.value {
                         Some(serde_json::Value::Object(map))
                             if map.get("__ok") == Some(&serde_json::Value::Bool(true)) =>
@@ -776,7 +773,7 @@ async fn dispatch(
             reply,
         } => {
             let result = match pages.get_mut(&page) {
-                Some(p) => wait_for(p, &cond, timeout_ms, poll_ms).await,
+                Some(p) => wait_for(p, page, prepared, &cond, timeout_ms, poll_ms).await,
                 None => Err(format!("page {page} is closed")),
             };
             let _ = reply.send(result);
@@ -789,7 +786,7 @@ async fn dispatch(
             let result = match pages.get_mut(&page) {
                 Some(p) => {
                     p.settle(max_ms).await;
-                    Ok(())
+                    follow_page_navigations(p, page, prepared).await
                 }
                 None => Err(format!("page {page} is closed")),
             };
@@ -849,49 +846,18 @@ async fn dispatch(
         }
         Cmd::History { page, delta, reply } => {
             let result = match pages.get_mut(&page) {
-                Some(p) => {
-                    if delta == 0 {
-                        let url = p.url_string();
-                        p.navigate_with_wait(&url, WaitUntil::Load)
-                            .await
-                            .map_err(|e| e.to_string())
-                    } else {
-                        // Re-navigate rather than ask the page: history.go() is
-                        // inert here, so this is the only way back() means what
-                        // it says.
-                        match history.get_mut(&page) {
-                            Some((stack, idx)) => {
-                                let target = if delta < 0 {
-                                    idx.checked_sub(delta.unsigned_abs() as usize)
-                                } else {
-                                    let n = *idx + delta as usize;
-                                    (n < stack.len()).then_some(n)
-                                };
-                                match target {
-                                    Some(t) => {
-                                        let url = stack[t].clone();
-                                        let r = p
-                                            .navigate_with_wait(&url, WaitUntil::Load)
-                                            .await
-                                            .map_err(|e| e.to_string());
-                                        if r.is_ok() {
-                                            if let Some((_, i)) = history.get_mut(&page) {
-                                                *i = t;
-                                            }
-                                        }
-                                        r
-                                    }
-                                    None => Err(if delta < 0 {
-                                        "no earlier page in this page's history".to_string()
-                                    } else {
-                                        "no later page in this page's history".to_string()
-                                    }),
-                                }
-                            }
-                            None => Err("this page has not navigated anywhere yet".to_string()),
-                        }
-                    }
+                Some(p) if delta == 0 => {
+                    let url = p.url_string();
+                    let r = p
+                        .navigate_with_wait(&url, WaitUntil::Load)
+                        .await
+                        .map_err(|e| e.to_string());
+                    prepared.remove(&page);
+                    r
                 }
+                Some(p) => traverse_history(p, delta).await.inspect(|_| {
+                    prepared.remove(&page);
+                }),
                 None => Err(format!("page {page} is closed")),
             };
             let _ = reply.send(result);
@@ -1011,7 +977,6 @@ async fn dispatch(
         Cmd::ClosePage { page } => {
             pages.remove(&page);
             blocked.remove(&page);
-            history.remove(&page);
             mocks.remove(&page);
             prepared.remove(&page);
             if let Some(browser) = page_owner.remove(&page) {
@@ -1060,6 +1025,8 @@ fn seal_render_cache(page: &mut Page) -> usize {
 /// only re-read the DOM would spin without ever letting the page change.
 async fn wait_for(
     page: &mut Page,
+    id: PageId,
+    prepared: &mut std::collections::HashSet<PageId>,
     cond: &WaitCond,
     timeout_ms: u64,
     poll_ms: u64,
@@ -1095,8 +1062,11 @@ async fn wait_for(
                 }
             });
         }
-        // settle() both advances the page and provides the delay.
+        // settle() both advances the page and provides the delay. Waiting is
+        // the usual thing to do after submitting a form, so the navigation it
+        // queued has to land here too, or the selector never appears.
         page.settle(poll.as_millis() as u64).await;
+        follow_page_navigations(page, id, prepared).await?;
     }
 }
 
@@ -1114,4 +1084,72 @@ fn reap(
         return;
     }
     contexts.remove(&browser);
+}
+
+/// Obscura queues a navigation the page asks for itself -- a clicked link, a
+/// submitted form, an assignment to `location` -- and leaves the embedder to
+/// commit it. Nothing did, so `click("a")` left the caller where they were.
+///
+/// Follow a short chain, because the new document can navigate again on load.
+/// A cross-scheme hop into `file://` is refused by Obscura and reads as no
+/// navigation at all.
+async fn follow_page_navigations(
+    page: &mut Page,
+    id: PageId,
+    prepared: &mut std::collections::HashSet<PageId>,
+) -> Result<(), String> {
+    for _ in 0..MAX_PAGE_NAVIGATION_HOPS {
+        let outcome = page
+            .process_pending_navigation_outcome()
+            .await
+            .map_err(|e| format!("the page navigated, and the navigation failed: {e}"))?;
+        match outcome {
+            PendingNavigationOutcome::Document => {
+                prepared.remove(&id);
+            }
+            // pushState or a fragment: the URL moved, the document did not.
+            PendingNavigationOutcome::SameDocument | PendingNavigationOutcome::None => break,
+        }
+    }
+    Ok(())
+}
+
+/// Move through the page's own session history. Obscura records every
+/// committed navigation, including the ones the page made, which a stack of
+/// our own built from goto() alone could not see.
+async fn traverse_history(page: &mut Page, delta: i32) -> Result<(), String> {
+    if page.history.is_empty() {
+        return Err("this page has not navigated anywhere yet".to_string());
+    }
+    let target = if delta < 0 {
+        page.history_index
+            .checked_sub(delta.unsigned_abs() as usize)
+    } else {
+        Some(page.history_index + delta as usize).filter(|&t| t < page.history.len())
+    };
+    let Some(target) = target else {
+        return Err(if delta < 0 {
+            "no earlier page in this page's history".to_string()
+        } else {
+            "no later page in this page's history".to_string()
+        });
+    };
+    // Loading the entry pushes it as a new one and drops everything ahead of
+    // it, so restore the list afterwards with the cursor on the entry we went
+    // to -- or where it was, if the load failed. This is what Obscura's own
+    // Page.navigateToHistoryEntry does.
+    let saved = page.history.clone();
+    let from = page.history_index;
+    let url = saved[target].clone();
+    page.set_history_index(target);
+    match page.navigate_with_wait(&url, WaitUntil::Load).await {
+        Ok(()) => {
+            page.set_history(saved, target);
+            Ok(())
+        }
+        Err(e) => {
+            page.set_history(saved, from);
+            Err(e.to_string())
+        }
+    }
 }

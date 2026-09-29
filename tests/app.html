@@ -18,6 +18,11 @@
     document.getElementById('go').addEventListener('click', function () {
       out.innerHTML += '<li class="r">clicked</li>';
     });
+    // An SPA handles its own submit. Without this, Enter submits the form and
+    // reloads the page, exactly as it would in Chrome.
+    document.getElementById('f').addEventListener('submit', function (e) {
+      e.preventDefault();
+    });
     document.getElementById('q').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') out.innerHTML += '<li class="r">enter</li>';
     });

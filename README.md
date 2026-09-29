@@ -131,7 +131,8 @@ Mutators return the page, so calls chain. Terminals return data.
 `reload()`, `waitForSelector( sel [, ms] )`, `waitForText( text [, ms] )`,
 `settle( [ms] )`, `setViewport( w, h )`, `close()`.
 
-`back()`/`forward()` walk a history stack the extension keeps itself, and error
+`back()`/`forward()` walk the page's session history, which includes the pages
+it reached by itself (a clicked link, a submitted form, a script), and error
 rather than doing nothing when there is nowhere to go.
 
 `waitUntil` is `load` (default), `domcontentloaded`, `networkidle0` or
@@ -141,7 +142,10 @@ rather than doing nothing when there is nowhere to go.
 `press( key [, sel] )`, `selectOption( sel, value )`, `scroll( x, y )`.
 
 These dispatch the events frameworks actually listen for, so a React controlled
-input updates rather than silently ignoring you.
+input updates rather than silently ignoring you. When one makes the page
+navigate (a link, `press( "Enter" )` in a form, a handler that sets `location`),
+the call returns once the new page has loaded. A navigation that starts later,
+from a timer, lands during `settle()` or a `waitFor…()`.
 
 **Reading** — `url()`, `title()`, `content()`, `text( [sel] )`,
 `markdown( [sel] )`, `links()`, `attr( sel, name )`, `count( sel )`,

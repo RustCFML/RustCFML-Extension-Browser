@@ -2,10 +2,10 @@
 p = Browser().newPage().goto( "https://example.com/", { waitUntil = "load" } );
 
 writeOutput( "title:    " & p.title() & chr(10) );
-writeOutput( "h1 text:  " & p.text( "h1" ) & chr(10) );
+writeOutput( "p text:   " & left( p.text( "p" ), 40 ) & chr(10) );
 writeOutput( "text():   " & left( p.text(), 40 ) & "..." & chr(10) );
 writeOutput( "count(p): " & p.count( "p" ) & chr(10) );
-writeOutput( "exists:   " & p.exists( "h1" ) & " / " & p.exists( ".nope" ) & chr(10) );
+writeOutput( "exists:   " & p.exists( "p" ) & " / " & p.exists( ".nope" ) & chr(10) );
 writeOutput( "attr:     " & p.attr( "a", "href" ) & chr(10) );
 writeOutput( "links:    " & arrayLen( p.links() ) & " -> " & p.links()[1] & chr(10) );
 writeOutput( "evaluate: " & p.evaluate( "document.querySelectorAll('p').length" ) & chr(10) );

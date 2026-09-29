@@ -23,15 +23,15 @@ Take the file for **your platform** from the
 and install it:
 
 ```sh
-rustcfml ext install browser-0.1.0-linux-x86_64.rcx --user
+rustcfml ext install browser-0.2.0-linux-x86_64.rcx --user
 rustcfml ext list
 ```
 
-Current build (v0.1.0):
-[macos-aarch64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.1.0/browser-0.1.0-macos-aarch64.rcx) ·
-[linux-x86_64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.1.0/browser-0.1.0-linux-x86_64.rcx) ·
-[linux-aarch64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.1.0/browser-0.1.0-linux-aarch64.rcx) ·
-[windows-x86_64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.1.0/browser-0.1.0-windows-x86_64.rcx)
+Current build (v0.2.0):
+[macos-aarch64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.2.0/browser-0.2.0-macos-aarch64.rcx) ·
+[linux-x86_64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.2.0/browser-0.2.0-linux-x86_64.rcx) ·
+[linux-aarch64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.2.0/browser-0.2.0-linux-aarch64.rcx) ·
+[windows-x86_64](https://github.com/RustCFML/RustCFML-Extension-Browser/releases/download/v0.2.0/browser-0.2.0-windows-x86_64.rcx)
 
 …or drop it into your application's `extensions/` directory and check it into
 the project. Each archive carries the library for one platform only, and is
@@ -47,7 +47,7 @@ full search order for where extensions are found.
 
 ```sh
 rustcfml ext build .
-rustcfml ext install browser-0.1.0.rcx --user
+rustcfml ext install browser-0.2.0.rcx --user
 ./tests/run.sh
 ```
 

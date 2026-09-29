@@ -9,8 +9,11 @@
 # six tests while none of them failed individually.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-rustcfml ext build . >/dev/null
-rustcfml ext install browser-0.1.0.rcx --user >/dev/null
+# Stop if either step fails: otherwise the suite quietly runs against whatever
+# build was installed last, and passes.
+version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)
+rustcfml ext build . >/dev/null || { echo "ext build failed"; exit 1; }
+rustcfml ext install "browser-${version}.rcx" --user >/dev/null || { echo "install of browser-${version}.rcx failed"; exit 1; }
 
 # Fixture server for the interception test. Loopback, so that one test needs the
 # private-network opt-in; the rest must NOT have it, or they would stop

@@ -104,7 +104,7 @@ fn browser_fetch<'a>(ctx: &'a Ctx, args: &[Value<'a>]) -> Result<Value<'a>> {
 /// `browserVersion()` — what this build can do, for support questions.
 fn browser_version<'a>(ctx: &'a Ctx, _args: &[Value<'a>]) -> Result<Value<'a>> {
     let out = ctx.strukt();
-    out.put("extension", ctx.string("0.1.0"))?;
+    out.put("extension", ctx.string(env!("CARGO_PKG_VERSION")))?;
     out.put("javascript", ctx.bool(true))?;
     // Both are unconditional in this build: the extension ships one artifact
     // with V8 and the render layer on. Reported anyway so support questions can
@@ -400,9 +400,12 @@ fn is_browser_object<'a>(ctx: &'a Ctx, args: &[Value<'a>]) -> Result<Value<'a>> 
     Ok(ctx.bool(is))
 }
 
+// module! takes a literal here, not env!(): keep it in step with Cargo.toml.
+// `ext build` names the .rcx from this, so a stale one ships a new build under
+// the old version. The test below fails if they drift.
 module! {
     name: "browser",
-    version: "0.1.0",
+    version: "0.2.0",
     bifs: {
         "browserFetch"     => browser_fetch,
         "browserVersion"   => browser_version,
@@ -411,4 +414,17 @@ module! {
         "browserServer"    => browser_server,
     },
     classes: { CfmlBrowser, page::CfmlPage, CfmlServer },
+}
+
+#[cfg(test)]
+mod version_tests {
+    #[test]
+    fn module_version_matches_cargo_toml() {
+        let expected = format!("version: \"{}\",", env!("CARGO_PKG_VERSION"));
+        assert!(
+            include_str!("lib.rs").contains(&expected),
+            "module! version in src/lib.rs does not match Cargo.toml ({})",
+            env!("CARGO_PKG_VERSION")
+        );
+    }
 }

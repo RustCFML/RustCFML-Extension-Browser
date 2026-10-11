@@ -3,6 +3,9 @@
 A real headless browser inside your CFML engine. JavaScript executes, CSS lays
 out, and you get screenshots and PDFs — with no Chrome, no Selenium and no JVM.
 
+![Static Badge](https://img.shields.io/badge/RustCFML-Powered-orange?labelColor=orange&color=grey)
+
+
 ```cfml
 page = Browser().newPage()
     .goto( "https://example.com/" )

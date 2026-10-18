@@ -405,7 +405,7 @@ fn is_browser_object<'a>(ctx: &'a Ctx, args: &[Value<'a>]) -> Result<Value<'a>> 
 // the old version. The test below fails if they drift.
 module! {
     name: "browser",
-    version: "0.2.1",
+    version: "0.2.2",
     bifs: {
         "browserFetch"     => browser_fetch,
         "browserVersion"   => browser_version,

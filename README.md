@@ -59,7 +59,7 @@ pinned to a tag, so no sibling checkout is needed and everyone builds the same
 engine:
 
 ```toml
-obscura-render = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.2-ri.1", features = ["paint"] }
+obscura-render = { git = "https://github.com/alexskinner/obscura.git", tag = "v0.2.5-ri.1", features = ["paint"] }
 ```
 
 Two things about that dependency that are not optional:

@@ -347,20 +347,18 @@ allowed`, which is the guard doing its job rather than a bug.
 
 ## Notes and limits
 
-- **Use one page at a time.** This is a correctness limit, not a speed one: in
-  the underlying engine, dropping a page while a second one is alive aborts the
-  process with a V8 fatal (`heap->isolate() == Isolate::TryGetCurrent()`), because
-  each page owns its own isolate and the realm is destroyed without entering it.
-  One page is completely stable; two is not. Reported upstream as
-  [#756](https://github.com/h4ckf0r0day/obscura/issues/756). Until it is fixed,
-  treat this as suited to tests, reports and sequential scraping — not to a pool
-  of concurrent pages.
-- All browser work also runs on one service thread, so concurrent requests queue
-  behind each other. That part is only a throughput limit, and the design is not
-  forced: pages are pinned to a thread because an isolate cannot move between
-  threads, but a pool of service threads with each browser pinned to one would
-  work. It is not worth building until the isolate lifecycle above is fixed —
-  more live isolates is precisely what triggers the abort.
+- **Several pages can be open at once.** Older builds aborted the process with a
+  V8 fatal (`heap->isolate() == Isolate::TryGetCurrent()`) when a page was dropped
+  while another was alive
+  ([#756](https://github.com/h4ckf0r0day/obscura/issues/756)). Upstream fixed
+  that in [#824](https://github.com/h4ckf0r0day/obscura/pull/824), and with
+  obscura v0.2.5 three live pages, closed in any order, and two browsers side
+  by side all run cleanly.
+- All browser work runs on one service thread, so concurrent requests queue
+  behind each other. That is a throughput limit, not a correctness one, and the
+  design is not forced: pages are pinned to a thread because an isolate cannot
+  move between threads, but a pool of service threads with each browser pinned
+  to one would work.
 - Every call has a deadline. A wedged page raises a catchable CFML error rather
   than hanging the request.
 - A page handle is `Send`, so it is safe to keep in `application` scope and to

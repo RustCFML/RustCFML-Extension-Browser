@@ -35,6 +35,9 @@ p.click( "##frag" );
 check( "a fragment link stays on the document", p.title(), "nav" );
 
 check( "history.length sees every entry", p.evaluate( "history.length" ) >= 2, true );
+
+p.evaluate( "(document.title = 'renamed')" );
+check( "title() sees a title set by script", p.title(), "renamed" );
 p.close();
 
 writeOutput( fails ? "SOME FAILED" & chr(10) : "ALL NAVIGATION OK" & chr(10) );

@@ -575,18 +575,25 @@ async fn dispatch(
         Cmd::Snapshot { page, reply } => {
             let result = match pages.get(&page) {
                 Some(p) => {
-                    let (html, text) = p
+                    // Page.title is captured once at load, so it misses a
+                    // `document.title = ...` made by script since. Read the
+                    // live <title> the same way obscura does at load.
+                    let (html, text, title) = p
                         .with_dom(|dom| {
                             let root = dom.document();
                             (
                                 dom.outer_html(root),
                                 crate::dom_util::visible_text(dom, root),
+                                dom.query_selector("title")
+                                    .ok()
+                                    .flatten()
+                                    .map(|t| dom.text_content(t)),
                             )
                         })
                         .unwrap_or_default();
                     Ok(Snapshot {
                         url: p.url_string(),
-                        title: p.title.clone(),
+                        title: title.unwrap_or_else(|| p.title.clone()),
                         html,
                         text,
                     })
